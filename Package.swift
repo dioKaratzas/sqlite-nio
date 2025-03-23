@@ -33,10 +33,7 @@ let package = Package(
             dependencies: [
                 .product(name: "OpenSSL", package: "OpenSSL-Package"),
             ],
-            cSettings: sqliteCSettings,
-            linkerSettings: [
-                .linkedLibrary("crypto"),
-            ]
+            cSettings: sqliteCSettings
         ),
         .target(
             name: "SQLiteNIO",
