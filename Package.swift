@@ -1,6 +1,20 @@
 // swift-tools-version:5.9
 import PackageDescription
 
+#if os(macOS)
+var csqlcipherUnsafeFlags = ["-L/opt/local/lib"]
+var sqlcipherCSetting = ["-I/opt/local/include/openssl-3"]
+#endif
+#if os(Linux)
+    #if arch(x86_64)
+var csqlcipherUnsafeFlags = ["-L/usr/lib/x86_64-linux-gnu"]
+    #endif
+    #if arch(arm64)
+var csqlcipherUnsafeFlags = ["-L/usr/lib/aarch64-linux-gnu"]
+    #endif
+var sqlcipherCSetting = ["-I/usr/include"]
+#endif
+
 let package = Package(
     name: "sqlite-nio",
     platforms: [
@@ -22,7 +36,6 @@ let package = Package(
             capability: .command(
                 intent: .custom(verb: "vendor-sqlite", description: "Vendor SQLite"),
                 permissions: [
-                    .allowNetworkConnections(scope: .all(ports: [443]), reason: "Retrieve the latest build of SQLite"),
                     .writeToPackageDirectory(reason: "Update the vendored SQLite files"),
                 ]
             ),
@@ -30,7 +43,11 @@ let package = Package(
         ),
         .target(
             name: "CSQLite",
-            cSettings: sqliteCSettings
+            cSettings: sqliteCSettings,
+            linkerSettings: [
+                .linkedLibrary("crypto"),
+                .unsafeFlags(csqlcipherUnsafeFlags)
+            ]
         ),
         .target(
             name: "SQLiteNIO",
@@ -62,6 +79,10 @@ var swiftSettings: [SwiftSetting] { [
 ] }
 
 var sqliteCSettings: [CSetting] { [
+    // Use OpenSSL for SQLcipher
+    .unsafeFlags(sqlcipherCSetting),
+    .define("SQLITE_HAS_CODEC"),
+    .define("SQLITE_TEMP_STORE", to: "2"),
     // Derived from sqlite3 version 3.43.0
     .define("SQLITE_DEFAULT_MEMSTATUS", to: "0"),
     .define("SQLITE_DISABLE_PAGECACHE_OVERFLOW_STATS"),

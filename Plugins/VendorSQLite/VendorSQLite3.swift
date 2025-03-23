@@ -31,7 +31,6 @@ struct VendorSQLite: CommandPlugin {
             return print(Self.usage)
         }
         
-        let force = extractor.extractFlag(named: "force") > 0
         Self.verbose = extractor.extractFlag(named: "verbose", shortForm: "v") > 0
 
         guard extractor.remainingArguments.isEmpty else {
@@ -61,19 +60,8 @@ struct VendorSQLite: CommandPlugin {
         }
         if self.verbose { Diagnostics.verbose("Current version: \(currentVersion)") }
         
-        // Check for new versions
-        let latestData = try await self.getLatestDownloadInfo()
-        
-        guard latestData.version.major == currentVersion.major else {
-            throw VendoringError("Latest version \(latestData.version) is not same major version as current \(currentVersion)")
-        }
-        guard force || latestData.version > currentVersion else {
-            throw VendoringError("Latest version \(latestData.version) is not newer than current \(currentVersion)")
-        }
-        if self.verbose { Diagnostics.verbose("Found valid update: \(latestData.version)") }
-        
-        // Retrieve new sources, unzip, apply patches, replace current sources.
-        try await self.downloadUnpackPatch(latestData, context: context, target: target)
+        // Copy pre-generated sources, apply patches, replace current sources.
+        try self.copyPatch(context: context, target: target)
         
         // Extract symbol graph from new sources.
         let symbols = try await self.extractSymbols(for: target, context: context)
@@ -89,70 +77,19 @@ struct VendorSQLite: CommandPlugin {
             using: symbols,
             in: context
         )
-        
-        // Stamp sources with updated version info.
-        try """
-        // This directory is generated from SQLite sources downloaded from \(latestData.downloadURL.absoluteString)
-        \(latestData.version)
-        
-        """.write(to: target.directory.appending("version.txt").fileUrl, atomically: true, encoding: .utf8)
-
-        Diagnostics.verbose("Upgraded from \(currentVersion) to \(latestData.version)")
     }
     
-    private func getLatestDownloadInfo() async throws -> Sqlite3ProductInfo {
-        let downloadHtmlURL = Self.sqliteURL.appendingPathComponent("download.html", isDirectory: false)
-        var foundCSV = false
-        
-        do {
-            for try await line in downloadHtmlURL.lines {
-                if !foundCSV, line.hasSuffix("Download product data for scripts to read") {
-                    foundCSV = true
-                } else if foundCSV, !line.hasPrefix("PRODUCT,") {
-                    break
-                } else if foundCSV, line.contains("sqlite-amalgamation") {
-                    let info = try Sqlite3ProductInfo(from: line)
-                    
-                    if info.filename.starts(with: "sqlite-amalgamation") {
-                        return info
-                    }
-                }
-            }
-        } catch let error as URLError where error.code == .cannotFindHost {
-            throw VendoringError("DNS error when trying to load downloads list. You probably need to use --disable-sandbox. Underlying error: \(error)")
-        }
-        
-        if foundCSV {
-            throw VendoringError("Could not find latest version on download page.")
-        } else {
-            throw VendoringError("Failed to find product CSV table on download page.")
-        }
-    }
-    
-    private func downloadUnpackPatch(
-        _ latestData: Sqlite3ProductInfo,
-        context: PluginContext,
-        target: ClangSourceModuleTarget
-    ) async throws {
-        let zipPath = context.pluginWorkDirectory.appending(latestData.filename)
-
-        if self.verbose { Diagnostics.verbose("Starting download from \(latestData.downloadURL.absoluteString)") }
-        try Process.run("curl", "-f\(self.verbose ? "" : "sS")Lo", "\(zipPath)", latestData.downloadURL.absoluteString)
-
-        let zipSize = try zipPath.fileUrl.resourceValues(forKeys: [.fileSizeKey]).fileSize
-        guard zipSize == latestData.sizeInBytes else {
-            throw VendoringError("Download \(zipPath) wrong size (expected \(latestData.sizeInBytes), got \(zipSize ?? -1))")
-        }
-
-        let sha3Hash = try await Process.popen("sha3sum", "-a", "256", "\(zipPath)").prefix(while: { !$0.isWhitespace })
-        guard sha3Hash == latestData.sha3Hash else {
-            throw VendoringError("Download \(zipPath) has wrong hash (expected \(latestData.sha3Hash), got \(sha3Hash))")
-        }
-
-        try Process.run("unzip", "-\(self.verbose ? "" : "q")j", "-d", "\(context.pluginWorkDirectory)", "\(zipPath)")
-        try Process.run("patch", "-\(self.verbose ? "" : "s")d", "\(context.pluginWorkDirectory)", "-p1", "-u", "-i", "\(Path(#filePath).replacingLastComponent(with: "001-warnings-and-data-race.patch"))"
+    private func copyPatch(context: PluginContext, target: ClangSourceModuleTarget) throws {
+        if self.verbose { Diagnostics.verbose("Copying files from \(context.package.directory)/src for processing.") }
+        try FileManager.default.copyItem(
+            at: context.package.directory.appending("src", "sqlite3.h").fileUrl,
+            to: context.pluginWorkDirectory.appending("sqlite3.h").fileUrl
         )
-
+        try FileManager.default.copyItem(
+            at: context.package.directory.appending("src", "sqlite3.c").fileUrl,
+            to: context.pluginWorkDirectory.appending("sqlite3.c").fileUrl
+        )
+        try Process.run("patch", "-\(self.verbose ? "" : "s")d", "\(context.pluginWorkDirectory)", "-p1", "-u", "-i", "\(Path(#filePath).replacingLastComponent(with: "001-warnings-and-data-race.patch"))")
         try FileManager.default.replaceItem(
             at: target.publicHeadersDirectory!.appending("\(Self.vendorPrefix)_sqlite3.h").fileUrl,
             withItemAt: context.pluginWorkDirectory.appending("sqlite3.h").fileUrl,
@@ -225,14 +162,16 @@ struct VendorSQLite: CommandPlugin {
             let writer = try FileHandle(forWritingTo: outputFile.fileUrl)
             defer { try? writer.close() }
             
-            let minimalCommonPrefix = symbols.reduce(symbols[0]) { $1.commonPrefix(with: $0, options: .literal)[...] }
-            
-            Diagnostics.verbose("Prefixing symbols in \(file.lastComponent) (minimum prefix \(minimalCommonPrefix))...")
+            // Filter out SQLcipher-added symbols to keep text substitution simple.
+            let symbs: [Substring] = symbols.filter { !$0.contains("sqlcipher") }
+            // We know what prefix we want.
+            let minimalCommonPrefix = "sqlite3_"
+            Diagnostics.verbose("Prefixing symbols in \(file.lastComponent) (minimum prefix \(minimalCommonPrefix))")
+
             for try await line in reader.bytes.keepingEmptySubsequencesLines {
                 let oline = line.contains(minimalCommonPrefix) ?
-                    symbols.reduce(line, { $0.replacingOccurrences(of: $1, with: "\(Self.vendorPrefix)_\($1)") }) :
+                    symbs.reduce(line, { $0.replacingOccurrences(of: $1, with: "\(Self.vendorPrefix)_\($1)") }) :
                     line
-                
                 try writer.write(contentsOf: Array("\(oline)\n".utf8))
             }
         }
@@ -267,4 +206,3 @@ struct VendoringError: Error, ExpressibleByStringLiteral, CustomStringConvertibl
     init(stringLiteral value: String) { self.description = value }
     init(_ description: String) { self.description = description }
 }
-
