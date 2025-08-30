@@ -99,7 +99,7 @@ let package = Package(
     traits: [
         .trait(name: SQLiteTrait, description: "Enable SQLite without encryption"),
         .trait(name: SQLCipherTrait, description: "Enable SQLCipher encryption support for encrypted databases"),
-        .default(enabledTraits: [SQLiteTrait])
+        .default(enabledTraits: []) // no default; client must pick
     ],
     dependencies: dependencies,
     targets: targets
