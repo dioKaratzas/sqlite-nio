@@ -3696,7 +3696,7 @@ SQLITE_API void sqlite_nio_sqlite3_randomness(int N, void *P);
 ** access is denied.
 **
 ** ^The first parameter to the authorizer callback is a copy of the third
-** parameter to the sqlite3_set_authorizer() interface. ^The second parameter
+** parameter to the sqlite_nio_sqlite3_set_authorizer() interface. ^The second parameter
 ** to the callback is an integer [SQLITE_COPY | action code] that specifies
 ** the particular action to be authorized. ^The third through sixth parameters
 ** to the callback are either NULL pointers or zero-terminated strings
@@ -3736,7 +3736,7 @@ SQLITE_API void sqlite_nio_sqlite3_randomness(int N, void *P);
 ** in addition to using an authorizer.
 **
 ** ^(Only a single authorizer can be in place on a database connection
-** at a time.  Each call to sqlite3_set_authorizer overrides the
+** at a time.  Each call to sqlite_nio_sqlite3_set_authorizer overrides the
 ** previous call.)^  ^Disable the authorizer by installing a NULL callback.
 ** The authorizer is disabled by default.
 **
@@ -3756,7 +3756,7 @@ SQLITE_API void sqlite_nio_sqlite3_randomness(int N, void *P);
 ** as stated in the previous paragraph, sqlite_nio_sqlite3_step() invokes
 ** sqlite_nio_sqlite3_prepare_v2() to reprepare a statement after a schema change.
 */
-SQLITE_API int sqlite3_set_authorizer(
+SQLITE_API int sqlite_nio_sqlite3_set_authorizer(
   sqlite3*,
   int (*xAuth)(void*,int,const char*,const char*,const char*,const char*),
   void *pUserData
@@ -3765,10 +3765,10 @@ SQLITE_API int sqlite3_set_authorizer(
 /*
 ** CAPI3REF: Authorizer Return Codes
 **
-** The [sqlite3_set_authorizer | authorizer callback function] must
+** The [sqlite_nio_sqlite3_set_authorizer | authorizer callback function] must
 ** return either [SQLITE_OK] or one of these two constants in order
 ** to signal SQLite whether or not the action is permitted.  See the
-** [sqlite3_set_authorizer | authorizer documentation] for additional
+** [sqlite_nio_sqlite3_set_authorizer | authorizer documentation] for additional
 ** information.
 **
 ** Note that SQLITE_IGNORE is also used as a [conflict resolution mode]
@@ -3780,7 +3780,7 @@ SQLITE_API int sqlite3_set_authorizer(
 /*
 ** CAPI3REF: Authorizer Action Codes
 **
-** The [sqlite3_set_authorizer()] interface registers a callback function
+** The [sqlite_nio_sqlite3_set_authorizer()] interface registers a callback function
 ** that is invoked to authorize certain SQL statement actions.  The
 ** second parameter to the callback is an integer code that specifies
 ** what action is being authorized.  These are the integer action codes that
@@ -4602,7 +4602,7 @@ typedef struct sqlite3_stmt sqlite3_stmt;
 ** off the Internet.  The internal databases can be given the
 ** large, default limits.  Databases managed by external sources can
 ** be given much smaller limits designed to prevent a denial of service
-** attack.  Developers might also want to use the [sqlite3_set_authorizer()]
+** attack.  Developers might also want to use the [sqlite_nio_sqlite3_set_authorizer()]
 ** interface to further control untrusted SQL.  The size of the database
 ** created by an untrusted script can be contained using the
 ** [max_page_count] [PRAGMA].
@@ -10808,7 +10808,7 @@ SQLITE_API int sqlite_nio_sqlite3_vtab_rhs_value(sqlite3_index_info*, int, sqlit
 ** for the SQL statement being evaluated.
 **
 ** Note that the [SQLITE_IGNORE] constant is also used as a potential
-** return value from the [sqlite3_set_authorizer()] callback and that
+** return value from the [sqlite_nio_sqlite3_set_authorizer()] callback and that
 ** [SQLITE_ABORT] is also a [result code].
 */
 #define SQLITE_ROLLBACK 1
@@ -15725,7 +15725,7 @@ struct BusyHandler {
 ** used for backwards compatibility.
 **
 **  1.  Queries can use either the PREFERRED or the LEGACY names
-**  2.  The sqlite3_set_authorizer() callback uses the LEGACY name
+**  2.  The sqlite_nio_sqlite3_set_authorizer() callback uses the LEGACY name
 **  3.  The PRAGMA table_list statement uses the PREFERRED name
 **
 ** The LEGACY names are stored in the internal symbol hash table
@@ -128475,7 +128475,7 @@ SQLITE_PRIVATE int sqlite3FixTriggerStep(
 **    May you share freely, never taking more than you give.
 **
 *************************************************************************
-** This file contains code used to implement the sqlite3_set_authorizer()
+** This file contains code used to implement the sqlite_nio_sqlite3_set_authorizer()
 ** API.  This facility is an optional feature of the library.  Embedded
 ** systems that do not need this facility may omit it by recompiling
 ** the library with -DSQLITE_OMIT_AUTHORIZATION=1
@@ -128533,7 +128533,7 @@ SQLITE_PRIVATE int sqlite3FixTriggerStep(
 ** Setting the auth function to NULL disables this hook.  The default
 ** setting of the auth function is NULL.
 */
-SQLITE_API int sqlite3_set_authorizer(
+SQLITE_API int sqlite_nio_sqlite3_set_authorizer(
   sqlite3 *db,
   int (*xAuth)(void*,int,const char*,const char*,const char*,const char*),
   void *pArg
@@ -144589,7 +144589,7 @@ typedef int (*sqlite3_loadext_entry)(
 #define sqlite_nio_sqlite3_result_text16le        sqlite3_api->result_text16le
 #define sqlite_nio_sqlite3_result_value           sqlite3_api->result_value
 #define sqlite_nio_sqlite3_rollback_hook          sqlite3_api->rollback_hook
-#define sqlite3_set_authorizer         sqlite3_api->set_authorizer
+#define sqlite_nio_sqlite3_set_authorizer         sqlite3_api->set_authorizer
 #define sqlite_nio_sqlite3_set_auxdata            sqlite3_api->set_auxdata
 #define sqlite_nio_sqlite3_snprintf               sqlite3_api->xsnprintf
 #define sqlite_nio_sqlite3_step                   sqlite3_api->step
@@ -144839,7 +144839,7 @@ typedef int (*sqlite3_loadext_entry)(
 #endif
 
 #ifdef SQLITE_OMIT_AUTHORIZATION
-# define sqlite3_set_authorizer         0
+# define sqlite_nio_sqlite3_set_authorizer         0
 #endif
 
 #ifdef SQLITE_OMIT_UTF16
@@ -145034,7 +145034,7 @@ static const sqlite3_api_routines sqlite3Apis = {
   sqlite_nio_sqlite3_result_text16le,
   sqlite_nio_sqlite3_result_value,
   sqlite_nio_sqlite3_rollback_hook,
-  sqlite3_set_authorizer,
+  sqlite_nio_sqlite3_set_authorizer,
   sqlite_nio_sqlite3_set_auxdata,
   sqlite_nio_sqlite3_snprintf,
   sqlite_nio_sqlite3_step,
