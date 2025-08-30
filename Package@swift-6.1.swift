@@ -52,7 +52,7 @@ var targets: [PackageDescription.Target] = [
     .target(
         name: "SQLiteNIO",
         dependencies: [
-            .target(name: "CSQLite", condition: .when(traits: [SQLiteTrait])),
+//            .target(name: "CSQLite", condition: .when(traits: [SQLiteTrait])),
             .target(name: "CSQLCipher", condition: .when(traits: [SQLCipherTrait])),
             .product(name: "Logging", package: "swift-log"),
             .product(name: "NIOCore", package: "swift-nio"),
@@ -99,7 +99,7 @@ let package = Package(
     traits: [
         .trait(name: SQLiteTrait, description: "Enable SQLite without encryption"),
         .trait(name: SQLCipherTrait, description: "Enable SQLCipher encryption support for encrypted databases"),
-        .default(enabledTraits: []) // no default; client must pick
+        .default(enabledTraits: [SQLCipherTrait])
     ],
     dependencies: dependencies,
     targets: targets
